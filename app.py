@@ -23,12 +23,18 @@ def log_to_file(ip, location):
 
 # 3. Get Real IP via JavaScript
 def get_ip():
-    url = 'https://api64.ipify.org?format=json'
-    script = f'await fetch("{url}").then(r => r.json())'
-    result = st_javascript(script)
-    if result and isinstance(result, dict):
-        return result.get("ip")
-    return st.context.ip_address # Fallback to new 2026 native IP
+    headers = st.context.headers
+    
+    # 1. Look for X-Forwarded-For (This usually contains the real IP)
+    x_forwarded = headers.get("X-Forwarded-For")
+    
+    if x_forwarded:
+        # If there are multiple IPs (like Proxy1, Proxy2, User), the first one is the User
+        real_ip = x_forwarded.split(",")[0].strip()
+        return real_ip
+    
+    # 2. Fallback to standard Streamlit 2026 IP context
+    return st.context.ip_address or "Unknown"
 
 user_ip = get_ip()
 
@@ -84,3 +90,4 @@ if st.query_params.get("admin") == "true":
         st.info("Log file starting up...")
 
 st.markdown('<div class="footer">MADE BY ENKODER.</div>', unsafe_allow_html=True)
+
