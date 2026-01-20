@@ -64,3 +64,4 @@ if st.query_params.get("admin") == "true":
     st.subheader("🕵️ ENKODER LIVE MONITOR")
     st.info(f"Captured IP: {user_ip}")
     st.write("If you don't see this IP in your Google Sheet, check the 'Logs' in Streamlit.")
+
